@@ -77,9 +77,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 40),
 
                     // Email field
-                    Text(
-                      'Email Address',
-                      style: TextStyle(fontSize: 14, color: Colors.white),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        'Email Address',
+                        style: TextStyle(fontSize: 14, color: Colors.white),
+                        textAlign: TextAlign.start,
+                      ),
                     ),
 
                     const SizedBox(height: 8),
@@ -152,9 +156,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
                     const SizedBox(height: 24),
                     //confirm pw field
-                    Text(
-                      "Confirm Password",
-                      style: TextStyle(fontSize: 14, color: Colors.white),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        "Confirm Password",
+                        style: TextStyle(fontSize: 14, color: Colors.white),
+                        textAlign: TextAlign.start,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
