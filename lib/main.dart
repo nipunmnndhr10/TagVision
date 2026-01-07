@@ -4,6 +4,7 @@ import 'package:img_cls/data/notifiers.dart';
 import 'package:img_cls/firebase_options.dart';
 import 'package:img_cls/screens/login_screen.dart';
 import 'package:img_cls/screens/signup_screen.dart';
+import 'package:img_cls/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +30,7 @@ class MyApp extends StatelessWidget {
             fontFamily: 'Inter',
             // brightness: Brightness.dark,
           ),
-          home: LoginScreen(),
+          home: SplashScreen(),
         );
       },
     );
