@@ -40,6 +40,12 @@ dependencies:
   cloud_firestore: ^6.1.1
   genai: ^0.0.1
   fluttertoast: ^9.0.0
+  firebase_storage: ^13.0.5
+  google_ml_kit: ^0.20.0
+  image_picker: ^1.2.1
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.1
+  sqflite: ^2.4.2
 
 dev_dependencies:
   flutter_test:
