@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# specifics me
+lib/screens/hive_test.dart
+lib/services/chat_provider.dart
+lib/services/http_service.dart
+lib/services/http_provider.dart
+lib/chat_test.dart
+lib/screens/galry_sc_altr.dart
