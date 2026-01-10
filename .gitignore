@@ -51,3 +51,4 @@ lib/services/http_service.dart
 lib/services/http_provider.dart
 lib/chat_test.dart
 lib/screens/galry_sc_altr.dart
+lib/helper/db_helper.dart
