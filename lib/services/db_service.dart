@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -51,13 +52,15 @@ class DbService {
 
   // ─── CRUD Operations ─────────────────────────────────────────────
 
-  Future<void> insertPhoto(String filePath, {String? initialTag}) async {
+  Future<int> insertPhoto(String filePath, {String? initialTag}) async {
     final db = await database;
-    await db.insert(tableName, {
+    final int photoId = await db.insert(tableName, {
       'file_path': filePath,
       'created_at': DateTime.now().millisecondsSinceEpoch,
       'tag': initialTag, // will be null for now, can be updated later
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    return photoId;
   }
 
   Future<List<Map<String, dynamic>>> getAllPhotos() async {
@@ -99,4 +102,15 @@ class DbService {
 
     return photosDir.path;
   }
+
+  // Future<void> insertTags(List<ImageLabel> labels) async{
+  //   final db = _database;
+  //   await db.update(
+  //     tableName,
+  //     {'tag': newTag},
+  //     where: 'id = ?',
+  //     whereArgs: [id],
+  //   );
+
+  // }
 }

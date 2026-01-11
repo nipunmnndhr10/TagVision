@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:img_cls/services/showConfirmDialog.dart';
+import 'package:img_cls/utils/showConfirmDialog.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../screens/login_screen.dart'; // adjust path
@@ -26,14 +26,47 @@ class _GalleryScreenState extends State<GalleryScreen> {
   //!Image labeler
   ImageLabeler? labeler;
 
-  List<Map<String, dynamic>> _photos = [];
+  List<Map<String, dynamic>> _photos = []; // all loaded photos
+  List<Map<String, dynamic>> _filteredPhotos = []; // displayed ones
   bool _isLoading = true;
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadPhotos();
     labeler = ImageLabeler(options: ImageLabelerOptions());
+
+    // !listen to search changes
+    _searchController.addListener(() {
+      final query = _searchController.text.trim().toLowerCase();
+
+      setState(() {
+        _searchQuery = query;
+
+        if (query.isEmpty) {
+          _filteredPhotos = List.from(_photos);
+        } else {
+          _filteredPhotos = _photos.where((photo) {
+            final tagStr =
+                (photo['tag'] as String?) ??
+                ''; // fetch tags column from that photo
+
+            final normalizedTags = tagStr
+                .toLowerCase()
+                .split(',')
+                .map((e) => e.trim())
+                .join(',');
+
+            return normalizedTags.contains(
+              query,
+            ); // if the tag of photo contains query then returns true -> and keeps the photo in the filtered list
+          }).toList();
+        }
+      });
+    });
   }
 
   @override
@@ -68,10 +101,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
   Future<void> _loadPhotos() async {
     try {
       final photos = await _dbService.getAllPhotos();
-      // print(photos);
+      print(photos);
       if (mounted) {
         setState(() {
           _photos = photos;
+          _filteredPhotos = List.from(
+            _photos,
+          ); //creates a new copy of the _photos lis
           _isLoading = false;
         });
       }
@@ -106,13 +142,26 @@ class _GalleryScreenState extends State<GalleryScreen> {
       await File(image.path).copy(newPath);
 
       // 5. Save path to database
-      await _dbService.insertPhoto(newPath);
+      final int photoId = await _dbService.insertPhoto(newPath);
 
-      final labels = await labelImage(newPath);
+      final List<ImageLabel> labels = await labelImage(newPath);
 
+      // for assurance
       for (final label in labels) {
         print('${label.label} (${label.confidence})');
       }
+      print("SUCCESSFUL Image labelling:");
+
+      // converting list of labels into one whole comma separated string
+      final String labelString = labels
+          .map((l) => l.label)
+          .join(','); // "cat,outdoor,sunset"
+
+      // inserting the comma separated tags into the tag col
+      await _dbService.updatePhotoTag(photoId, labelString);
+
+      // for assurance
+      print("UPDATED IMAGE TAG COLUMN");
 
       // 6. Refresh UI
       await _loadPhotos();
@@ -142,71 +191,100 @@ class _GalleryScreenState extends State<GalleryScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _photos.isEmpty
-          ? _buildEmptyState()
-          : GridView.builder(
-              padding: const EdgeInsets.all(8),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 6,
-                mainAxisSpacing: 6,
-                childAspectRatio: 1.0,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextFormField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Search image by tags (dog, beach, food...)',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
+                ),
               ),
-              itemCount: _photos.length,
-              itemBuilder: (context, index) {
-                final photo = _photos[index];
-                final filePath = photo['file_path'] as String;
-                final int photoId = photo['id'] as int;
-
-                return GestureDetector(
-                  onLongPress: () async {
-                    // Show the reusable confirmation dialog
-                    final bool confirmed = await ShowConfirmDialog.show(
-                      context,
-                      title: "Delete Photo?",
-                      content: "Are you sure you want to delete this Photo?",
-                      cancelText: "Cancel",
-                      confirmText: "Delete",
-                    );
-
-                    if (confirmed) {
-                      // User confirmed → delete the task
-                      // Delete from DB
-                      await _dbService.deletePhoto(photoId);
-
-                      // Delete from disk
-                      final file = File(filePath);
-                      if (await file.exists()) {
-                        await file.delete();
-                      }
-                    }
-
-                    // Refresh UI
-                    setState(() {
-                      _photos = List<Map<String, dynamic>>.from(_photos)
-                        ..removeAt(index);
-                    });
-                  },
-
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      File(filePath),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey.shade300,
-                          child: const Icon(Icons.broken_image, size: 40),
-                        );
-                      },
-                    ),
-                  ),
-                );
+              onChanged: (query) {
+                // filter query
               },
             ),
+          ),
+          SizedBox(height: 20),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredPhotos.isEmpty
+                ? _buildEmptyState()
+                : GridView.builder(
+                    padding: const EdgeInsets.all(8),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 6,
+                          mainAxisSpacing: 6,
+                          childAspectRatio: 1.0,
+                        ),
+                    itemCount: _filteredPhotos.length,
+                    itemBuilder: (context, index) {
+                      final photo = _filteredPhotos[index];
+                      final filePath = photo['file_path'] as String;
+                      final int photoId = photo['id'] as int;
+
+                      return GestureDetector(
+                        onLongPress: () async {
+                          // Show the reusable confirmation dialog
+                          final bool confirmed = await ShowConfirmDialog.show(
+                            context,
+                            title: "Delete Photo?",
+                            content:
+                                "Are you sure you want to delete this Photo?",
+                            cancelText: "Cancel",
+                            confirmText: "Delete",
+                          );
+
+                          if (confirmed) {
+                            // User confirmed → delete the task
+                            // Delete from DB
+                            await _dbService.deletePhoto(photoId);
+
+                            // Delete from disk
+                            final file = File(filePath);
+                            if (await file.exists()) {
+                              await file.delete();
+                            }
+                            // Refresh UI
+                            setState(() {
+                              _photos = List<Map<String, dynamic>>.from(_photos)
+                                ..removeAt(index);
+                            });
+                          }
+                        },
+
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(filePath),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade300,
+                                child: const Icon(Icons.broken_image, size: 40),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
+  }
+
+  Future<void> _filterPhotos(String query) async {
+    final photos = await _dbService.getAllPhotos();
   }
 
   Future<void> _handleLogout() async {
