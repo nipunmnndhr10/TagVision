@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:img_cls/data/notifiers.dart';
 import 'package:img_cls/utils/showConfirmDialog.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -100,7 +101,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   Future<void> _loadPhotos() async {
     try {
-      final photos = await _dbService.getAllPhotos();
+      final String uid = FirebaseAuth.instance.currentUser!.uid;
+      final photos = await _dbService.getAllPhotos(userId: uid);
       print(photos);
       if (mounted) {
         setState(() {
@@ -142,7 +144,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
       await File(image.path).copy(newPath);
 
       // 5. Save path to database
-      final int photoId = await _dbService.insertPhoto(newPath);
+      final String uid = FirebaseAuth.instance.currentUser!.uid;
+      final int photoId = await _dbService.insertPhoto(newPath, userId: uid);
 
       final List<ImageLabel> labels = await labelImage(newPath);
 
@@ -158,7 +161,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           .join(','); // "cat,outdoor,sunset"
 
       // inserting the comma separated tags into the tag col
-      await _dbService.updatePhotoTag(photoId, labelString);
+      await _dbService.updatePhotoTag(photoId, labelString, userId: uid);
 
       // for assurance
       print("UPDATED IMAGE TAG COLUMN");
@@ -182,6 +185,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
       appBar: AppBar(
         title: const Text("Gallery"),
         actions: [
+          IconButton(
+            onPressed: () {
+              isDarkModeNotifier.value = !isDarkModeNotifier.value;
+            },
+            icon: ValueListenableBuilder(
+              valueListenable: isDarkModeNotifier,
+              builder: (context, isDarkMode, child) {
+                return Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode);
+              },
+            ),
+          ),
+
           IconButton(
             icon: const Icon(Icons.add_photo_alternate),
             tooltip: 'Add new photo',
@@ -245,8 +260,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
                           if (confirmed) {
                             // User confirmed → delete the task
-                            // Delete from DB
-                            await _dbService.deletePhoto(photoId);
+                            // Delete from DB (only for current user)
+                            final String uid =
+                                FirebaseAuth.instance.currentUser!.uid;
+                            await _dbService.deletePhoto(photoId, userId: uid);
 
                             // Delete from disk
                             final file = File(filePath);
@@ -256,7 +273,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
                             // Refresh UI
                             setState(() {
                               _photos = List<Map<String, dynamic>>.from(_photos)
-                                ..removeAt(index);
+                                ..removeWhere((p) => p['id'] == photoId);
+
+                              _filteredPhotos = List<Map<String, dynamic>>.from(
+                                _filteredPhotos,
+                              )..removeWhere((p) => p['id'] == photoId);
                             });
                           }
                         },
@@ -284,23 +305,34 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   Future<void> _filterPhotos(String query) async {
-    final photos = await _dbService.getAllPhotos();
+    final String uid = FirebaseAuth.instance.currentUser!.uid;
+    final photos = await _dbService.getAllPhotos(userId: uid);
   }
 
   Future<void> _handleLogout() async {
-    try {
-      await _auth.signOut();
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+    ShowConfirmDialog.show(
+      context,
+      title: "Logout",
+      content: "Are you sure you want to logout?",
+      cancelText: "Cancel",
+      confirmText: "Logout",
+    ).then((confirmed) async {
+      if (confirmed) {
+        try {
+          await _auth.signOut();
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ShowPopup.showError(context, e.toString());
+          }
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        ShowPopup.showError(context, e.toString());
-      }
-    }
+    });
   }
 
   Widget _buildEmptyState() {

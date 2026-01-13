@@ -15,7 +15,7 @@ class DbService {
   static const String dbName = 'gallery.db';
   static const String tableName = 'photos';
 
-  static const int currentDbVersion = 2; // ← increased version
+  static const int currentDbVersion = 3; // ← increased version to add user_id
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -36,52 +36,80 @@ class DbService {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_path TEXT NOT NULL,
             created_at INTEGER NOT NULL,
-            tag TEXT
+            tag TEXT,
+            user_id TEXT NOT NULL
           )
         ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          // Add the new column for users who already have version 1
-          await db.execute('ALTER TABLE $tableName ADD COLUMN tag TEXT');
+          // older code path: ensure tag exists (defensive)
+          try {
+            await db.execute('ALTER TABLE $tableName ADD COLUMN tag TEXT');
+          } catch (_) {}
         }
-        // You can add more future migrations here (3 → 4, etc.)
+        if (oldVersion < 3) {
+          // add user_id column for migration
+          try {
+            await db.execute('ALTER TABLE $tableName ADD COLUMN user_id TEXT');
+          } catch (_) {}
+        }
       },
     );
   }
 
   // ─── CRUD Operations ─────────────────────────────────────────────
 
-  Future<int> insertPhoto(String filePath, {String? initialTag}) async {
+  Future<int> insertPhoto(
+    String filePath, {
+    String? initialTag,
+    required String userId,
+  }) async {
     final db = await database;
     final int photoId = await db.insert(tableName, {
       'file_path': filePath,
       'created_at': DateTime.now().millisecondsSinceEpoch,
       'tag': initialTag, // will be null for now, can be updated later
+      'user_id': userId,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
 
     return photoId;
   }
 
-  Future<List<Map<String, dynamic>>> getAllPhotos() async {
+  Future<List<Map<String, dynamic>>> getAllPhotos({
+    required String userId,
+  }) async {
     final db = await database;
-    return await db.query(tableName, orderBy: 'created_at DESC');
+    return await db.query(
+      tableName,
+      where: 'user_id = ?',
+      whereArgs: [userId],
+      orderBy: 'created_at DESC',
+    );
   }
 
   /// Update tag for a specific photo
-  Future<void> updatePhotoTag(int id, String? newTag) async {
+  Future<void> updatePhotoTag(
+    int id,
+    String? newTag, {
+    required String userId,
+  }) async {
     final db = await database;
     await db.update(
       tableName,
       {'tag': newTag},
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, userId],
     );
   }
 
-  Future<void> deletePhoto(int id) async {
+  Future<void> deletePhoto(int id, {required String userId}) async {
     final db = _database;
-    await db?.delete(tableName, where: 'id = ?', whereArgs: [id]);
+    await db?.delete(
+      tableName,
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, userId],
+    );
   }
 
   Future<void> closeDatabase() async {

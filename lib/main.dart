@@ -2,7 +2,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:img_cls/data/notifiers.dart';
 import 'package:img_cls/firebase_options.dart';
-import 'package:img_cls/screens/hive_test.dart';
 import 'package:img_cls/screens/splash_screen.dart';
 
 void main() async {
